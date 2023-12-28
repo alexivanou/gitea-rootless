@@ -1,0 +1,93 @@
+version: "2"
+
+services:
+  server:
+    image: gitea/gitea:1.21.2-rootless
+    container_name: gitea_server
+    restart: always
+    volumes:
+      - ./data:/var/lib/gitea
+      - ./config:/etc/gitea
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "3000:3000"
+      - "8022:8022"
+    user: "1000:1000"
+    environment:
+      - GITEA__database__DB_TYPE=mysql
+      - GITEA__database__HOST=db:3306
+      - GITEA__database__NAME=gitea
+      - GITEA__database__USER=gitea
+      - GITEA__database__PASSWD=gitea
+      - GITEA__mailer__ENABLED=true
+      - GITEA__mailer__FROM=git@gitea.local
+      - GITEA__mailer__PROTOCOL=smtp
+      - GITEA__mailer__HOST=mailhog
+      - GITEA__mailer__PORT=1025
+      - GITEA__mailer__IS_TLS_ENABLED=false
+      - GITEA__repository__ENABLE_PUSH_CREATE_USER=true
+      - GITEA__repository__ENABLE_PUSH_CREATE_ORG=true
+      - GITEA__server__SSH_PORT=8022
+      - GITEA__server__SSH_LISTEN_PORT=8022
+      - VIRTUAL_HOST=http://gitea.local:3000
+      - ROOT_URL=http://gitea.local:3000
+      - USER_UID=1000
+      - USER_GID=1000
+    networks:
+      - default
+    depends_on:
+      - db
+      - mailhog
+
+  runner:
+    image: gitea/act_runner:latest
+    container_name: gitea_runner
+    restart: always
+    depends_on:
+      - server
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+#      - /run/containerd/containerd.sock:/var/run/docker.sock
+      - ./runner-data:/data
+    environment:
+      - GITEA_RUNNER_REGISTRATION_TOKEN=Gbubhid3TA5PNo7fOWqKJadBOIAkcG0xKxRICA8j
+      - GITEA_INSTANCE_URL=http://gitea.local:3000
+      - GITEA_RUNNER_NAME=runner
+    user: "1000:137"
+    networks:
+      - default
+    links:
+      - "server:gitea.local"
+
+  db:
+    image: mysql:8
+    container_name: gitea_mysql
+    hostname: db
+    restart: always
+    user: "1000:1000"
+    environment:
+      - MYSQL_ROOT_PASSWORD=gitea
+      - MYSQL_USER=gitea
+      - MYSQL_PASSWORD=gitea
+      - MYSQL_DATABASE=gitea
+    volumes:
+      - ./mysql:/var/lib/mysql
+    networks:
+      - default
+
+  mailhog:
+    image: mailhog/mailhog
+    container_name: "gitea_mailhog"
+    hostname: mailhog
+    restart: always
+    user: "1000:1000"
+    ports:
+      - '8025:8025'
+    networks:
+      - default
+
+networks:
+    default:
+        name: gitea_net
+        driver: bridge
